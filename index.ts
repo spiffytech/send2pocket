@@ -48,7 +48,15 @@ server.route({
         ).
         then(response => response.json()).
         // TODO: Handle denied authz
-        then(console.log.bind(null, "resp:")).
+        then(resp =>
+            fs.readFile("tokens.json", "utf8").
+            then(JSON.parse).
+            catch(() => ({})).
+            then(tokens => {
+                tokens[resp.username] = resp;
+                return fs.writeFile("tokens.json", JSON.stringify(tokens));
+            })
+        ).
         then(() => reply("blah")).
         catch(console.error);
     }
