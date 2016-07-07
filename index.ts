@@ -1,6 +1,13 @@
+import * as crypto from "crypto";
 import * as Hapi from "hapi";
 import {fs} from "mz";
 import fetch = require("node-fetch");
+
+function username_to_hash(username: string) {
+    return crypto.createHash("sha1").
+    update(username).
+    digest("hex");
+}
 
 const server = new Hapi.Server();
 server.connection({
@@ -51,9 +58,9 @@ server.route({
         then(resp =>
             fs.readFile("tokens.json", "utf8").
             then(JSON.parse).
-            catch(() => ({})).
+            catch(() => ({})).  // no file? Default to empty hash.
             then(tokens => {
-                tokens[resp.username] = resp;
+                tokens[username_to_hash(resp.username)] = resp;
                 return fs.writeFile("tokens.json", JSON.stringify(tokens));
             })
         ).
@@ -90,7 +97,7 @@ export function serve() {
 
 serve();
 
-fs.readFile("oauth_tokens.json", "utf8").
+fs.readFile("tokens.json", "utf8").
 catch(() =>
     fetch(
         "https://getpocket.com/v3/oauth/request",
