@@ -11,6 +11,7 @@
   "dependencies": {
     "bunyan": "^1.8.1",
     "hapi": "^13.5.0",
+    "mz": "^2.4.0",
     "node-fetch": "^1.5.3",
     "ts-node": "^0.9.3",
     "tslint": "^3.13.0",
