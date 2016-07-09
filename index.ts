@@ -1,12 +1,50 @@
+process.on("unhandledRejection", function(reason, p) {
+    const msg = reason.stack || reason;
+    console.error(`Possibly Unhandled Rejection at: Promise ${p} reason: ${msg}`);
+});
+
+import * as RDash from "rethinkdbdash";
 import * as crypto from "crypto";
 import * as Hapi from "hapi";
 import {fs} from "mz";
 import fetch = require("node-fetch");
 
+const r = RDash({db: "send2pocket"});
+
+interface Article {
+    user: string;
+    html: string;
+}
+
 function username_to_hash(username: string) {
     return crypto.createHash("sha1").
     update(username).
     digest("hex");
+}
+
+function send_to_pocket(
+    consumer_key: string,
+    access_token: string,
+    page_id: string
+) {
+    const url = `http://e47eee0c.ngrok.io/articles/${page_id}`;
+
+    return fetch(
+        "https://getpocket.com/v3/add",
+        {
+            method: "POST",
+            headers: {
+                "X-Accept": "application/json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                url,
+                consumer_key,
+                access_token
+            })
+        }
+    ).
+    catch(console.error);
 }
 
 const server = new Hapi.Server();
@@ -26,10 +64,14 @@ server.on("response", function (request: Hapi.Request) {
 });
 
 server.route({
-    method: "GET",
+    method: "POST",
     path: "/webhook",
     handler: function (req, reply) {
-        reply("blah");
+        r.table("articles").insert(<Article>{
+            user: username_to_hash(req.payload.sender),
+            html: req.payload["body-html"]
+        }).
+        then(() => reply("blah"));
     }
 });
 

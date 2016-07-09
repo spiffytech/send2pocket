@@ -1,0 +1,7 @@
+{
+  "host": "localhost",
+  "port": 28015,
+  "db": "send2pocket",
+  "discovery": true,
+  "timeout": 60
+}

@@ -5,6 +5,8 @@
     "hapi": "registry:dt/hapi#13.0.0+20160602125023",
     "mz": "registry:dt/mz#0.0.0+20160217153523",
     "node": "registry:dt/node#6.0.0+20160621231320",
-    "node-fetch": "registry:dt/node-fetch#0.0.0+20160607205125"
+    "node-fetch": "registry:dt/node-fetch#0.0.0+20160607205125",
+    "rethinkdb": "github:niieani/rethinkdb-typescript-definition/rethinkdb/rethinkdb.d.ts",
+    "rethinkdbdash": "github:niieani/rethinkdb-typescript-definition/rethinkdbdash/rethinkdbdash.d.ts"
   }
 }
