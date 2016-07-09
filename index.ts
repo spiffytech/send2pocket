@@ -11,6 +11,9 @@ import fetch = require("node-fetch");
 
 const r = RDash({db: "send2pocket"});
 
+const DOMAIN = process.env.DOMAIN;
+const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || DOMAIN;
+
 interface User {
     id: string;
     token: string;
@@ -33,7 +36,7 @@ function send_to_pocket(
     access_token: string,
     page_id: string
 ) {
-    const url = `http://e47eee0c.ngrok.io/articles/${page_id}`;
+    const url = `http://${DOMAIN}/articles/${page_id}`;
 
     return fetch(
         "https://getpocket.com/v3/add",
@@ -114,12 +117,12 @@ server.route({
             }).run().
             then(() => user_id);
         }).
-        then((user_id: string) => reply(user_id)).
+        then((user_id: string) => reply(`${user_id}@${EMAIL_DOMAIN}`)).
         catch(console.error);
     }
 });
 
-const REDIRECT_URL = "http://e47eee0c.ngrok.io/oauth-finish";
+const REDIRECT_URL = `http://${DOMAIN}/oauth-finish`;
 function request_oauth_token() {
     const code = process.env.POCKET_CODE;
 }
