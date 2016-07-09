@@ -11,14 +11,20 @@ import fetch = require("node-fetch");
 
 const r = RDash({db: "send2pocket"});
 
+interface User {
+    id: string;
+    token: string;
+    pocket_username: string;
+}
+
 interface Article {
     user: string;
     html: string;
 }
 
-function username_to_hash(username: string) {
-    return crypto.createHash("sha1").
-    update(username).
+function token_to_hash(token: string) {
+    return crypto.createHash("sha256").
+    update(token).
     digest("hex");
 }
 
@@ -67,8 +73,9 @@ server.route({
     method: "POST",
     path: "/webhook",
     handler: function (req, reply) {
+        const recipient = req.payload.recipient.substring(0, req.payload.recipient.indexOf("@"));
         r.table("articles").insert(<Article>{
-            user: username_to_hash(req.payload.sender),
+            user: token_to_hash(recipient),
             html: req.payload["body-html"]
         }).
         then(() => reply("blah"));
@@ -97,16 +104,17 @@ server.route({
         ).
         then(response => response.json()).
         // TODO: Handle denied authz
-        then(resp =>
-            fs.readFile("tokens.json", "utf8").
-            then(JSON.parse).
-            catch(() => ({})).  // no file? Default to empty hash.
-            then(tokens => {
-                tokens[username_to_hash(resp.username)] = resp;
-                return fs.writeFile("tokens.json", JSON.stringify(tokens));
-            })
-        ).
-        then(() => reply("blah")).
+        then(resp => {
+            const user_id = token_to_hash(resp.access_token);
+
+            return r.table("users").insert(<User>{
+                id: user_id,
+                token: resp.access_token,
+                pocket_username: resp.username
+            }).run().
+            then(() => user_id);
+        }).
+        then((user_id: string) => reply(user_id)).
         catch(console.error);
     }
 });
@@ -139,27 +147,23 @@ export function serve() {
 
 serve();
 
-fs.readFile("tokens.json", "utf8").
-catch(() =>
-    fetch(
-        "https://getpocket.com/v3/oauth/request",
-        {
-            method: "POST",
-            headers: {
-                "X-Accept": "application/json",
-                "Content-Type": "application/json; charset=UTF-8"
-            },
-            body: JSON.stringify({
-                consumer_key: "56302-ee90a9f07ff5dd8801da643e",
-                redirect_uri: REDIRECT_URL
-            })
-        }
-    ).
-    then(response => response.json()).
-    then(json => json.code).
-    then(code => {
-        oauth_code = code;
-        console.log(`https://getpocket.com/auth/authorize?request_token=${code}&redirect_uri=${REDIRECT_URL}`);
-     }).
-    catch(console.error)
-);
+fetch(
+    "https://getpocket.com/v3/oauth/request",
+    {
+        method: "POST",
+        headers: {
+            "X-Accept": "application/json",
+            "Content-Type": "application/json; charset=UTF-8"
+        },
+        body: JSON.stringify({
+            consumer_key: "56302-ee90a9f07ff5dd8801da643e",
+            redirect_uri: REDIRECT_URL
+        })
+    }
+).
+then(response => response.json()).
+then(json => json.code).
+then(code => {
+    oauth_code = code;
+    console.log(`https://getpocket.com/auth/authorize?request_token=${code}&redirect_uri=${REDIRECT_URL}`);
+});
