@@ -13,6 +13,7 @@ import fetch = require("node-fetch");
 
 const r = RDash({db: "send2pocket"});
 
+const POCKET_CODE = process.env.POCKET_CODE;
 const DOMAIN = process.env.DOMAIN;
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || DOMAIN;
 const OAUTH_COOKIE = "oauth_token";
@@ -34,12 +35,15 @@ function token_to_hash(token: string) {
     digest("hex");
 }
 
+function mk_article_path(user_id: string, article_id: string) {
+    return `/articles/${user_id}/${article_id}`;
+}
+
 function send_to_pocket(
-    consumer_key: string,
     access_token: string,
-    page_id: string
+    url_path: string
 ) {
-    const url = `http://${DOMAIN}/articles/${page_id}`;
+    const url = `http://${DOMAIN}/${url_path.replace(/^\//, "")}`;
 
     return fetch(
         "https://getpocket.com/v3/add",
@@ -51,7 +55,7 @@ function send_to_pocket(
             },
             body: JSON.stringify({
                 url,
-                consumer_key,
+                consumer_key: POCKET_CODE,
                 access_token
             })
         }
@@ -80,11 +84,44 @@ server.route({
     path: "/webhook",
     handler: function (req, reply) {
         const recipient = req.payload.recipient.substring(0, req.payload.recipient.indexOf("@"));
-        r.table("articles").insert(<Article>{
-            user: token_to_hash(recipient),
-            html: req.payload["body-html"]
+
+        r.table("users").get(recipient).run().
+        then((user: User) => {
+            assert(user, `invalid email recipient: ${recipient}`);
+            const user_id = user.id;
+
+            return r.table("articles").insert(<Article>{
+                user: token_to_hash(recipient),
+                html: req.payload["body-html"]
+            }).
+            then(results => {
+                assert.equal(
+                    results.generated_keys.length,
+                    1,
+                    "Wrong number of keys generated from storing Article"
+                );
+                const article_id = results.generated_keys[0];
+                const url_path = mk_article_path(user_id, article_id);
+                const access_token = user.token;
+
+                return send_to_pocket(access_token, url_path).
+                then(() => reply(`Stored article! ${article_id}`));
+            });
         }).
-        then(() => reply("blah"));
+        catch(console.error);
+    }
+});
+
+server.route({
+    method: "GET",
+    path: "/articles/{user_id}/{article_id}",  // include user_id just for URL entropy
+    handler: function(request, reply) {
+        return r.table("articles").get(request.params["article_id"]).
+        then((article: Article) => {
+            if(!article) return reply("Article not found").code(404);
+
+            reply(article.html);
+        });
     }
 });
 
