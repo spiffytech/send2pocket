@@ -4,6 +4,7 @@ process.on("unhandledRejection", function(reason, p) {
 });
 
 import * as assert from "assert";
+const tidy = require("libtidy");
 const yar = require("yar");
 import * as RDash from "rethinkdbdash";
 import * as crypto from "crypto";
@@ -120,7 +121,22 @@ server.route({
         then((article: Article) => {
             if(!article) return reply("Article not found").code(404);
 
-            reply(article.html);
+            console.log(tidy);
+            return new Promise((resolve, reject) => {
+                tidy.tidyBuffer(
+                    article.html,
+                    {
+                        indent: true,
+                        wrap: 128
+                    },
+                    (err, results) => {
+                        if(err) return reject(err);
+
+                        console.log(results);
+                        resolve(reply(results.output.toString()));
+                    }
+                );
+            });
         });
     }
 });
