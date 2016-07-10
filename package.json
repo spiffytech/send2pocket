@@ -4,10 +4,11 @@
   "description": "Forwards emails to Pocket",
   "main": "index.js",
   "scripts": {
+    "prepublish": "typings install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "spiffytech",
-  "license": "ISC",
+  "license": "AGPL",
   "dependencies": {
     "bunyan": "^1.8.1",
     "hapi": "^13.5.0",
