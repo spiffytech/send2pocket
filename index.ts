@@ -3,6 +3,8 @@ process.on("unhandledRejection", function(reason, p) {
     console.error(`Possibly Unhandled Rejection at: Promise ${p} reason: ${msg}`);
 });
 
+import * as assert from "assert";
+const yar = require("yar");
 import * as RDash from "rethinkdbdash";
 import * as crypto from "crypto";
 import * as Hapi from "hapi";
@@ -13,6 +15,7 @@ const r = RDash({db: "send2pocket"});
 
 const DOMAIN = process.env.DOMAIN;
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || DOMAIN;
+const OAUTH_COOKIE = "oauth_token";
 
 interface User {
     id: string;
@@ -85,12 +88,43 @@ server.route({
     }
 });
 
+server.route({
+    method: "GET",
+    path: "/oauth-start",
+    handler: function(req, reply) {
+        const REDIRECT_URL = `http://${DOMAIN}/oauth-finish`;
+        fetch(
+            "https://getpocket.com/v3/oauth/request",
+            {
+                method: "POST",
+                headers: {
+                    "X-Accept": "application/json",
+                    "Content-Type": "application/json; charset=UTF-8"
+                },
+                body: JSON.stringify({
+                    consumer_key: "56302-ee90a9f07ff5dd8801da643e",
+                    redirect_uri: REDIRECT_URL
+                })
+            }
+        ).
+        then(response => response.json()).
+        then(json => {
+            (<any>req).yar.set(OAUTH_COOKIE, json.code);
+            const oauth_url = `https://getpocket.com/auth/authorize?request_token=${json.code}&redirect_uri=${REDIRECT_URL}`;
+            return reply.redirect(oauth_url);
+        });
+
+    }
+});
+
 // TODO: store this in session between oauth authz request and the oauth callback
-let oauth_code: string = null;
 server.route({
     method: "GET",
     path: "/oauth-finish",
     handler: function (request, reply) {
+        const oauth_code = (<any>request).yar.get(OAUTH_COOKIE);
+        assert(oauth_code);
+
         fetch(
             "https://getpocket.com/v3/oauth/authorize",
             {
@@ -122,7 +156,6 @@ server.route({
     }
 });
 
-const REDIRECT_URL = `http://${DOMAIN}/oauth-finish`;
 function request_oauth_token() {
     const code = process.env.POCKET_CODE;
 }
@@ -141,32 +174,24 @@ export function serve() {
     });
 
 
+    const cookie_passwd = process.env.COOKIE_PASSWD;
+    assert(cookie_passwd);
+    server.register({
+        register: yar,
+        options: {
+            cookieOptions: {
+                password: cookie_passwd,
+                isSecure: false
+            }
+        }
+    }, err => {
+        assert(!err, err);
 
-    server.initialize().
-    then(() => server.start()).
-    then(() => console.log("Server running at:", server.info.uri)).
-    catch(err => { console.error(err); throw err; });
+        server.initialize().
+        then(() => server.start()).
+        then(() => console.log("Server running at:", server.info.uri)).
+        catch(err => { console.error(err); throw err; });
+    });
 }
 
 serve();
-
-fetch(
-    "https://getpocket.com/v3/oauth/request",
-    {
-        method: "POST",
-        headers: {
-            "X-Accept": "application/json",
-            "Content-Type": "application/json; charset=UTF-8"
-        },
-        body: JSON.stringify({
-            consumer_key: "56302-ee90a9f07ff5dd8801da643e",
-            redirect_uri: REDIRECT_URL
-        })
-    }
-).
-then(response => response.json()).
-then(json => json.code).
-then(code => {
-    oauth_code = code;
-    console.log(`https://getpocket.com/auth/authorize?request_token=${code}&redirect_uri=${REDIRECT_URL}`);
-});
