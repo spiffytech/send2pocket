@@ -12,6 +12,8 @@ import * as Hapi from "hapi";
 import {fs} from "mz";
 import fetch = require("node-fetch");
 
+import * as oauth from "./lib/oauth";
+
 const r = RDash({db: "send2pocket"});
 
 const POCKET_CODE = process.env.POCKET_CODE;
@@ -145,32 +147,16 @@ server.route({
     method: "GET",
     path: "/oauth-start",
     handler: function(req, reply) {
-        const REDIRECT_URL = `http://${DOMAIN}/oauth-finish`;
-        fetch(
-            "https://getpocket.com/v3/oauth/request",
-            {
-                method: "POST",
-                headers: {
-                    "X-Accept": "application/json",
-                    "Content-Type": "application/json; charset=UTF-8"
-                },
-                body: JSON.stringify({
-                    consumer_key: "56302-ee90a9f07ff5dd8801da643e",
-                    redirect_uri: REDIRECT_URL
-                })
-            }
-        ).
-        then(response => response.json()).
-        then(json => {
-            (<any>req).yar.set(OAUTH_COOKIE, json.code);
-            const oauth_url = `https://getpocket.com/auth/authorize?request_token=${json.code}&redirect_uri=${REDIRECT_URL}`;
-            return reply.redirect(oauth_url);
+        oauth.initialize_oauth().
+        then(oauth_data => {
+            const code = oauth_data.code;
+            const redirect_url = oauth_data.redirect_url;
+            (<any>req).yar.set(OAUTH_COOKIE, code);
+            return reply.redirect(redirect_url);
         });
-
     }
 });
 
-// TODO: store this in session between oauth authz request and the oauth callback
 server.route({
     method: "GET",
     path: "/oauth-finish",
@@ -178,32 +164,7 @@ server.route({
         const oauth_code = (<any>request).yar.get(OAUTH_COOKIE);
         assert(oauth_code);
 
-        fetch(
-            "https://getpocket.com/v3/oauth/authorize",
-            {
-                method: "POST",
-                headers: {
-                    "X-Accept": "application/json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    consumer_key: process.env.POCKET_CODE,
-                    code: oauth_code
-                })
-            }
-        ).
-        then(response => response.json()).
-        // TODO: Handle denied authz
-        then(resp => {
-            const user_id = token_to_hash(resp.access_token);
-
-            return r.table("users").insert(<User>{
-                id: user_id,
-                token: resp.access_token,
-                pocket_username: resp.username
-            }).run().
-            then(() => user_id);
-        }).
+        oauth.finish_oauth(oauth_code).
         then((user_id: string) => reply(`${user_id}@${EMAIL_DOMAIN}`)).
         catch(console.error);
     }
