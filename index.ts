@@ -6,37 +6,19 @@ process.on("unhandledRejection", function(reason, p) {
 import * as assert from "assert";
 const tidy = require("libtidy");
 const yar = require("yar");
-import * as RDash from "rethinkdbdash";
 import * as crypto from "crypto";
 import * as Hapi from "hapi";
 import {fs} from "mz";
 import fetch = require("node-fetch");
 
 import * as oauth from "./lib/oauth";
-
-const r = RDash({db: "send2pocket"});
+import r from "./lib/db";
+import * as common from "./lib/common";
 
 const POCKET_CODE = process.env.POCKET_CODE;
 const DOMAIN = process.env.DOMAIN;
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || DOMAIN;
 const OAUTH_COOKIE = "oauth_token";
-
-interface User {
-    id: string;
-    token: string;
-    pocket_username: string;
-}
-
-interface Article {
-    user: string;
-    html: string;
-}
-
-function token_to_hash(token: string) {
-    return crypto.createHash("sha256").
-    update(token).
-    digest("hex");
-}
 
 function mk_article_path(user_id: string, article_id: string) {
     return `/articles/${user_id}/${article_id}`;
@@ -94,7 +76,7 @@ server.route({
             const user_id = user.id;
 
             return r.table("articles").insert(<Article>{
-                user: token_to_hash(recipient),
+                user: common.token_to_hash(recipient),
                 html: req.payload["body-html"]
             }).
             then(results => {

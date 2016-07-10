@@ -1,4 +1,6 @@
 import fetch = require("node-fetch");
+import r from "./db";
+import * as common from "./common";
 
 const DOMAIN = process.env.DOMAIN;
 
@@ -25,19 +27,6 @@ export function initialize_oauth() {
     });
 }
 
-interface User {
-    id: string;
-    token: string;
-    pocket_username: string;
-}
-import * as crypto from "crypto";
-function token_to_hash(token: string) {
-    return crypto.createHash("sha256").
-    update(token).
-    digest("hex");
-}
-import * as RDash from "rethinkdbdash";
-const r = RDash({db: "send2pocket"});
 // TODO: make this return an existing user if Pocket username is already in DB
 export function finish_oauth(oauth_code: string) {
     return fetch(
@@ -57,7 +46,7 @@ export function finish_oauth(oauth_code: string) {
     then(response => response.json()).
     // TODO: Handle denied authz
     then(resp => {
-        const user_id = token_to_hash(resp.access_token);
+        const user_id = common.token_to_hash(resp.access_token);
 
         return r.table("users").insert(<User>{
             id: user_id,
